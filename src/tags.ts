@@ -22,9 +22,6 @@ export function tagResponseToTagIds(response: string, tags: PaperlessTagSchema[]
   return tags.filter((tag) => tagNames.includes(tag.name)).map((tag) => tag.id)
 }
 
-export function tagsToString(tags: PaperlessTagSchema[], ignoreTagId: number): string {
-  return tags
-    .filter((tag) => tag.id !== ignoreTagId)
-    .map((tag) => tag.name)
-    .join(", ")
+export function cleanupTags(tags: PaperlessTagSchema[], ignoreTagId: number): string[] {
+  return tags.filter((tag) => tag.id !== ignoreTagId).map((tag) => tag.name)
 }

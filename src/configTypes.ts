@@ -4,7 +4,8 @@ export type OpenAIConfig = {
   baseUrl: string
   language: string
   documentTitleSystemPrompt: string
-  tagSuggestionSystemPrompt: string
+  tagSuggestionSystemPromptGenerator: (params: { allTags: string[] }) => string
+  dateGuessingSystemPromptGenerator: (params: { currentTitle: string }) => string
 }
 
 export type PaperlessConfig = {

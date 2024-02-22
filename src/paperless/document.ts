@@ -5,10 +5,10 @@ export const paperlessDocumentSchema = z.object({
   title: z.string(),
   content: z.string(),
   tags: z.array(z.number()),
-  created: z.string(),
-  created_date: z.string(),
-  modified: z.string(),
-  added: z.string(),
+  created_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  created: z.coerce.date(),
+  modified: z.coerce.date(),
+  added: z.coerce.date(),
 })
 
 export type PaperlessDocumentSchema = z.infer<typeof paperlessDocumentSchema>

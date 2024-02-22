@@ -3,7 +3,8 @@ import { findDocumentsWithTagId } from "./findDocumentsWithTagId.ts"
 import { processDocument } from "./processDocument.ts"
 
 // Usage example
-processDocument(624)
+// processDocument(47)
+processDocument(474)
 
 const main = async () => {
   const documentIds = await findDocumentsWithTagId(paperlessConfig.processTagId)
