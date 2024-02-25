@@ -6,6 +6,7 @@ import { systemTags, tagResponseToTagIds, cleanupTags } from "./tags"
 
 export async function processDocument(documentId: number, ignoreMissingProcessTag: boolean = false): Promise<void> {
   console.log(`Document ID ${documentId}: Processing document`)
+  console.log(`${paperlessConfig.baseUrl}/documents/${documentId}/details`)
 
   const paperlessBaseUrl = paperlessConfig.baseUrl
   const paperlessAuthHeader = { Authorization: `Token ${paperlessConfig.apiKey}` }
