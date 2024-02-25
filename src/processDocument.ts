@@ -23,7 +23,7 @@ export async function processDocument(documentId: number, ignoreMissingProcessTa
     return
   }
 
-  const originalDocumentContent = documentJson.content
+  const originalDocumentContent = documentJson.content.substring(0, 3000)
   const originalDocumentTags = documentJson.tags
   const originalDocumentTitle = documentJson.title
 
