@@ -28,6 +28,7 @@ export async function openAIRequest(
     body: JSON.stringify(data), // Convert the JavaScript object to a JSON string
   })
   if (!response.ok) {
+    console.error("OpenAI response", JSON.stringify(await response.json(), null, 2))
     throw new Error(`HTTP error! status: ${response.status}`)
   }
 
