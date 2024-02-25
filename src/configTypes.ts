@@ -2,7 +2,6 @@ export type OpenAIConfig = {
   apiKey: string
   model: string
   baseUrl: string
-  language: string
   documentTitleSystemPrompt: string
   tagSuggestionSystemPromptGenerator: (params: { allTags: string[] }) => string
   dateGuessingSystemPromptGenerator: (params: { currentTitle: string }) => string

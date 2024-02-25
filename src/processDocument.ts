@@ -4,7 +4,7 @@ import { documentDetails } from "./documentDetails"
 import { openAIRequest } from "./openAIRequest"
 import { systemTags, tagResponseToTagIds, cleanupTags } from "./tags"
 
-export async function processDocument(documentId: number): Promise<void> {
+export async function processDocument(documentId: number, ignoreMissingProcessTag: boolean = false): Promise<void> {
   console.log(`Document ID ${documentId}: Processing document`)
 
   const paperlessBaseUrl = paperlessConfig.baseUrl
@@ -14,30 +14,38 @@ export async function processDocument(documentId: number): Promise<void> {
 
   const tagIdToRemove = paperlessConfig.processTagId
 
+  console.log(`Document ID ${documentId}: Reading document details from paperless.`)
+  const documentJson = await documentDetails(documentUrl, paperlessAuthHeader)
+
+  if (!ignoreMissingProcessTag && !documentJson.tags.includes(tagIdToRemove)) {
+    console.log(`Document ID ${documentId}: Skipping document, it doesn't have the process tag.`)
+    return
+  }
+
+  const originalDocumentContent = documentJson.content
+  const originalDocumentTags = documentJson.tags
+  const originalDocumentTitle = documentJson.title
+
+  const modelName = openAIConfig.model
+
+  const openAIResponseContent = await openAIRequest(openAIConfig.documentTitleSystemPrompt, originalDocumentContent)
+  console.log(`Document ID ${documentId}: ${modelName} title suggestion: ${openAIResponseContent}`)
+
   const allTags = await systemTags(paperlessBaseUrl, paperlessAuthHeader)
 
   const taggingSystemRoleMessage = openAIConfig.tagSuggestionSystemPromptGenerator({
     allTags: cleanupTags(allTags, tagIdToRemove),
   })
 
-  console.log(`Document ID ${documentId}: Reading document details from paperless.`)
-  const documentJson = await documentDetails(documentUrl, paperlessAuthHeader)
-
-  const originalDocumentContent = documentJson.content
-  const originalDocumentTags = documentJson.tags
-  const originalDocumentTitle = documentJson.title
-
-  const openAIResponseContent = await openAIRequest(openAIConfig.documentTitleSystemPrompt, originalDocumentContent)
-  console.log(`Document ID ${documentId}: OpenAI title suggestion: ${openAIResponseContent}`)
-
-  const taggingResponse = await openAIRequest(taggingSystemRoleMessage, originalDocumentContent)
-  const newTags = tagResponseToTagIds(taggingResponse, allTags)
-  console.log(`Document ID ${documentId}: OpenAI tagging suggestion: ${taggingResponse}`)
+  const taggingResponse = await openAIRequest(taggingSystemRoleMessage, originalDocumentContent, 0.2)
+  console.log(`Document ID ${documentId}: ${modelName} tagging suggestion: ${taggingResponse}`)
 
   const dateResponse = await openAIRequest(
     openAIConfig.dateGuessingSystemPromptGenerator({ currentTitle: originalDocumentTitle }),
     originalDocumentContent
   )
+
+  const additionalTags = []
 
   const guessedDate = ((dateResponse: string) => {
     try {
@@ -50,7 +58,14 @@ export async function processDocument(documentId: number): Promise<void> {
     }
   })(dateResponse)
 
-  console.log(`Document ID ${documentId}: OpenAI date guess: ${dateResponse}`)
+  if (guessedDate === null) {
+    console.log(`Document ID ${documentId}: Failed to guess a date.`)
+    additionalTags.push("ai-date_guess_failed")
+  }
+
+  console.log(`Document ID ${documentId}: ${modelName} date guess: ${dateResponse}`)
+
+  const newTags = tagResponseToTagIds([taggingResponse, ...additionalTags].join(", "), allTags)
 
   let patchData = {
     title: openAIResponseContent,
