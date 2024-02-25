@@ -30,7 +30,7 @@ const main = async () => {
 app.post("/process/:documentId", async (req, res) => {
   const documentId = parseInt(z.object({ documentId: z.string() }).parse(req.params).documentId)
   try {
-    await processDocument(documentId)
+    await processDocument(documentId, true)
 
     res.send(JSON.stringify({ success: true }))
   } catch (error) {
