@@ -2,7 +2,6 @@ import type { OpenAIConfig, PaperlessConfig } from "./src/configTypes"
 
 export const openAIConfig: OpenAIConfig = {
   apiKey: "your-api-key-here",
-  language: "german",
   model: "gpt-4-0125-preview",
   baseUrl: "https://api.openai.com/v1/chat/completions",
   documentTitleSystemPrompt: [
