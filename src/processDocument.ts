@@ -29,22 +29,36 @@ export async function processDocument(documentId: number, ignoreMissingProcessTa
 
   const modelName = openAIConfig.model
 
-  const openAIResponseContent = await openAIRequest(openAIConfig.documentTitleSystemPrompt, originalDocumentContent)
-  console.log(`Document ID ${documentId}: ${modelName} title suggestion: ${openAIResponseContent}`)
+  const generateTitle = async () => {
+    const openAIResponseContent = await openAIRequest(openAIConfig.documentTitleSystemPrompt, originalDocumentContent)
+    console.log(`Document ID ${documentId}: ${modelName} title suggestion: ${openAIResponseContent}`)
+    return openAIResponseContent
+  }
 
   const allTags = await systemTags(paperlessBaseUrl, paperlessAuthHeader)
 
-  const taggingSystemRoleMessage = openAIConfig.tagSuggestionSystemPromptGenerator({
-    allTags: cleanupTags(allTags, tagIdToRemove),
-  })
+  const generateTags = async () => {
+    const taggingSystemRoleMessage = openAIConfig.tagSuggestionSystemPromptGenerator({
+      allTags: cleanupTags(allTags, tagIdToRemove),
+    })
 
-  const taggingResponse = await openAIRequest(taggingSystemRoleMessage, originalDocumentContent, 0.2)
-  console.log(`Document ID ${documentId}: ${modelName} tagging suggestion: ${taggingResponse}`)
+    const taggingResponse = await openAIRequest(taggingSystemRoleMessage, originalDocumentContent, 0.2)
+    console.log(`Document ID ${documentId}: ${modelName} tagging suggestion: ${taggingResponse}`)
+    return taggingResponse
+  }
 
-  const dateResponse = await openAIRequest(
-    openAIConfig.dateGuessingSystemPromptGenerator({ currentTitle: originalDocumentTitle }),
-    originalDocumentContent
-  )
+  const guessDate = async () => {
+    return await openAIRequest(
+      openAIConfig.dateGuessingSystemPromptGenerator({ currentTitle: originalDocumentTitle }),
+      originalDocumentContent
+    )
+  }
+
+  const [openAIResponseContent, taggingResponse, dateResponse] = await Promise.all([
+    generateTitle(),
+    generateTags(),
+    guessDate(),
+  ])
 
   const additionalTags = []
 
