@@ -8,18 +8,6 @@ import express from "express"
 const app = express()
 const port = 8080
 
-app.post("/process/:documentId", async (req, res) => {
-  const documentId = parseInt(z.object({ documentId: z.string() }).parse(req.params).documentId)
-  try {
-    await processDocument(documentId)
-
-    res.send(JSON.stringify({ success: true }))
-  } catch (error) {
-    console.error(error)
-    res.send(JSON.stringify({ success: false }))
-  }
-})
-
 const main = async () => {
   try {
     const documentIds = await findDocumentsWithTagId(paperlessConfig.processTagId)
@@ -38,6 +26,29 @@ const main = async () => {
     console.error(error)
   }
 }
+
+app.post("/process/:documentId", async (req, res) => {
+  const documentId = parseInt(z.object({ documentId: z.string() }).parse(req.params).documentId)
+  try {
+    await processDocument(documentId)
+
+    res.send(JSON.stringify({ success: true }))
+  } catch (error) {
+    console.error(error)
+    res.send(JSON.stringify({ success: false }))
+  }
+})
+
+app.post("/process", async (req, res) => {
+  try {
+    await main()
+
+    res.send(JSON.stringify({ success: true }))
+  } catch (error) {
+    console.error(error)
+    res.send(JSON.stringify({ success: false }))
+  }
+})
 
 setInterval(main, 1000 * 60 * 3)
 
