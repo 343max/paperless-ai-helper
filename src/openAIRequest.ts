@@ -6,6 +6,23 @@ export async function openAIRequest(
   originalDocumentContent: string,
   temperature: number = 0.7
 ): Promise<string> {
+  const result = await openAIChat(
+    [
+      { role: "system", content: systemRoleMessage },
+      { role: "user", content: originalDocumentContent },
+    ],
+    temperature
+  )
+  return result.content
+}
+
+export async function openAIChat(
+  messages: { role: "system" | "user" | "assistant"; content: string }[],
+  temperature: number = 0.7
+): Promise<{
+  content: string
+  messages: { role: "system" | "user" | "assistant"; content: string }[]
+}> {
   const { apiKey: api_key, model, baseUrl: base_url } = openAIConfig
 
   const headers = {
@@ -15,17 +32,14 @@ export async function openAIRequest(
 
   const data = {
     model: model,
-    messages: [
-      { role: "system", content: systemRoleMessage },
-      { role: "user", content: originalDocumentContent },
-    ],
+    messages,
     temperature,
   }
 
   const response = await fetch(base_url, {
     method: "POST",
     headers: headers,
-    body: JSON.stringify(data), // Convert the JavaScript object to a JSON string
+    body: JSON.stringify(data),
   })
   if (!response.ok) {
     console.error("OpenAI response", JSON.stringify(await response.json(), null, 2))
@@ -35,7 +49,11 @@ export async function openAIRequest(
   const json = await response.json()
   try {
     const responseData = openAIResponseSchema.parse(json)
-    return responseData.choices[0].message.content
+    const content = responseData.choices[0].message.content
+    return {
+      content,
+      messages: [...messages, { role: "assistant" as const, content }],
+    }
   } catch (error) {
     console.error("OpenAI response data", JSON.stringify(json, null, 2))
     throw error

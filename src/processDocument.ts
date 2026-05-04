@@ -1,6 +1,6 @@
 import { z } from "zod"
 import { openAIConfig } from "../config"
-import { openAIRequest } from "./openAIRequest"
+import { openAIChat } from "./openAIRequest"
 
 export async function processDocument(input: {
   content: string
@@ -14,45 +14,50 @@ export async function processDocument(input: {
   const truncatedContent = input.content.substring(0, openAIConfig.maxContentLength)
   const modelName = openAIConfig.model
 
-  const generateTitle = async () => {
-    const result = await openAIRequest(openAIConfig.documentTitleSystemPrompt, truncatedContent)
-    console.log(`${modelName} title suggestion: ${result}`)
-    return result
-  }
+  // --- Turn 1: title + establish cache ---
+  const titleUserMessage = `${truncatedContent}\n\n${openAIConfig.titleUserPrompt}`
 
-  const generateTags = async () => {
-    const taggingSystemRoleMessage = openAIConfig.tagSuggestionSystemPromptGenerator({
-      allTags: input.allTags,
-    })
-    const result = await openAIRequest(taggingSystemRoleMessage, truncatedContent, 0.2)
-    console.log(`${modelName} tagging suggestion: ${result}`)
-    return result
-  }
-
-  const guessDate = async () => {
-    const result = await openAIRequest(
-      openAIConfig.dateGuessingSystemPromptGenerator({ currentTitle: input.title }),
-      truncatedContent
-    )
-    console.log(`${modelName} date guess: ${result}`)
-    return result
-  }
-
-  const [titleResponse, taggingResponse, dateResponse] = await Promise.all([
-    generateTitle(),
-    generateTags(),
-    guessDate(),
+  const { content: titleResponse, messages: contextAfterTitle } = await openAIChat([
+    { role: "system", content: openAIConfig.unifiedSystemPrompt },
+    { role: "user", content: titleUserMessage },
   ])
 
-  const tags = taggingResponse === "NONE" ? [] : taggingResponse.split(", ")
+  console.log(`${modelName} title suggestion: ${titleResponse}`)
+
+  // --- Turn 2: date (cache hit on doc prefix) ---
+  const dateUserMessage = openAIConfig.dateUserPromptGenerator({
+    currentTitle: input.title,
+  })
+
+  const { content: dateRaw, messages: contextAfterDate } = await openAIChat(
+    [...contextAfterTitle, { role: "user", content: dateUserMessage }],
+    0.7
+  )
+
+  console.log(`${modelName} date guess: ${dateRaw}`)
+
+  // --- Turn 3: tags (cache hit) ---
+  const tagsUserMessage = openAIConfig.tagsUserPromptGenerator({
+    allTags: input.allTags,
+  })
+
+  const { content: tagsRaw } = await openAIChat(
+    [...contextAfterDate, { role: "user", content: tagsUserMessage }],
+    0.2
+  )
+
+  console.log(`${modelName} tagging suggestion: ${tagsRaw}`)
+
+  // --- Parse results ---
+  const tags = tagsRaw === "NONE" ? [] : tagsRaw.split(", ")
 
   const date = (() => {
-    if (dateResponse === "NONE") return null
+    if (dateRaw === "NONE") return null
     try {
       return z
         .string()
         .regex(/^\d{4}-\d{2}-\d{2}$/)
-        .parse(dateResponse)
+        .parse(dateRaw)
     } catch {
       return null
     }
