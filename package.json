@@ -1,9 +1,14 @@
 {
   "name": "paperless-ai-helper",
-  "module": "src/main.ts",
   "type": "module",
+  "module": "src/server.ts",
   "scripts": {
-    "start": "bun run src/main.ts"
+    "start": "bun run src/server.ts",
+    "test-llm": "cat test-fixtures/document.json | bun run src/main.ts"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "zod": "^3.22.4"
   },
   "devDependencies": {
     "@types/bun": "latest",
@@ -11,9 +16,5 @@
   },
   "peerDependencies": {
     "typescript": "^5.0.0"
-  },
-  "dependencies": {
-    "express": "^4.18.2",
-    "zod": "^3.22.4"
   }
 }
