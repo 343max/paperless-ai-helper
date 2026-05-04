@@ -1,14 +1,12 @@
-import type { OpenAIConfig, PaperlessConfig } from "./src/configTypes"
+import type { OpenAIConfig, PaperlessConfig } from "./src/configTypes";
 
 export const openAIConfig: OpenAIConfig = {
   apiKey: "your-api-key-here",
   model: "gpt-4-0125-preview",
   baseUrl: "https://api.openai.com/v1/chat/completions",
   unifiedSystemPrompt: [
-    "You are an expert in analyzing documents.",
-    "All documents are real, none are exemplary.",
-    "Be aware that the text may result from an OCR process and contain imprecise segments.",
-    "Always respond in German.",
+    "Hier ist der Anfang eines Dokuments zum Analysieren. Bitte lies es sorgfältig durch. Ich werde dir im Anschluss ein paar Fragen stellen.",
+    "Bitte beachte, dass das Dokument durch den Scan merkwürdige Text Artefakte enthalten kann.",
   ].join(" "),
   titleUserPrompt: [
     "Erstelle einen Titel für dieses Dokument.",
@@ -39,10 +37,10 @@ export const openAIConfig: OpenAIConfig = {
       'Falls keine Tags passen, antworte mit "NONE".',
       "Antworte NUR mit den Tags oder NONE, sonst nichts.",
     ].join("\n"),
-}
+};
 
 export const paperlessConfig: PaperlessConfig = {
   apiKey: "your-api-key-here",
   baseUrl: "http://my-paperless-instance.com/",
   processTagId: 1, // tag id of files that should be processed
-}
+};
