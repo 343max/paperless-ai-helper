@@ -1,102 +1,67 @@
 import { z } from "zod"
-import { openAIConfig, paperlessConfig } from "../config"
-import { documentDetails } from "./documentDetails"
-import { openAIRequest } from "./openAIRequest"
-import { systemTags, tagResponseToTagIds, cleanupTags } from "./tags"
+import { openAIConfig } from "../config"
+import { openAIChat } from "./openAIRequest"
 
-export async function processDocument(documentId: number, ignoreMissingProcessTag: boolean = false): Promise<void> {
-  console.log(`Document ID ${documentId}: Processing document`)
-  console.log(`${paperlessConfig.baseUrl}/documents/${documentId}/details`)
-
-  const paperlessBaseUrl = paperlessConfig.baseUrl
-  const paperlessAuthHeader = { Authorization: `Token ${paperlessConfig.apiKey}` }
-
-  const documentUrl = `${paperlessBaseUrl}/api/documents/${documentId}/`
-
-  const tagIdToRemove = paperlessConfig.processTagId
-
-  console.log(`Document ID ${documentId}: Reading document details from paperless.`)
-  const documentJson = await documentDetails(documentUrl, paperlessAuthHeader)
-
-  if (!ignoreMissingProcessTag && !documentJson.tags.includes(tagIdToRemove)) {
-    console.log(`Document ID ${documentId}: Skipping document, it doesn't have the process tag.`)
-    return
-  }
-
-  const originalDocumentContent = documentJson.content.substring(0, 3000)
-  const originalDocumentTags = documentJson.tags
-  const originalDocumentTitle = documentJson.title
-
+export async function processDocument(input: {
+  content: string
+  title: string
+  allTags: string[]
+}): Promise<{
+  title: string
+  tags: string[]
+  date: string | null
+}> {
+  const truncatedContent = input.content.substring(0, openAIConfig.maxContentLength)
   const modelName = openAIConfig.model
 
-  const generateTitle = async () => {
-    const openAIResponseContent = await openAIRequest(openAIConfig.documentTitleSystemPrompt, originalDocumentContent)
-    console.log(`Document ID ${documentId}: ${modelName} title suggestion: ${openAIResponseContent}`)
-    return openAIResponseContent
-  }
+  // --- Turn 1: title + establish cache ---
+  const titleUserMessage = `${truncatedContent}\n\n${openAIConfig.titleUserPrompt}`
 
-  const allTags = await systemTags(paperlessBaseUrl, paperlessAuthHeader)
-
-  const generateTags = async () => {
-    const taggingSystemRoleMessage = openAIConfig.tagSuggestionSystemPromptGenerator({
-      allTags: cleanupTags(allTags, tagIdToRemove),
-    })
-
-    const taggingResponse = await openAIRequest(taggingSystemRoleMessage, originalDocumentContent, 0.2)
-    console.log(`Document ID ${documentId}: ${modelName} tagging suggestion: ${taggingResponse}`)
-    return taggingResponse
-  }
-
-  const guessDate = async () => {
-    return await openAIRequest(
-      openAIConfig.dateGuessingSystemPromptGenerator({ currentTitle: originalDocumentTitle }),
-      originalDocumentContent
-    )
-  }
-
-  const [openAIResponseContent, taggingResponse, dateResponse] = await Promise.all([
-    generateTitle(),
-    generateTags(),
-    guessDate(),
+  const { content: titleResponse, messages: contextAfterTitle } = await openAIChat([
+    { role: "system", content: openAIConfig.unifiedSystemPrompt },
+    { role: "user", content: titleUserMessage },
   ])
 
-  const additionalTags = []
+  console.log(`${modelName} title suggestion: ${titleResponse}`)
 
-  const guessedDate = ((dateResponse: string) => {
+  // --- Turn 2: date (cache hit on doc prefix) ---
+  const dateUserMessage = openAIConfig.dateUserPromptGenerator({
+    currentTitle: input.title,
+  })
+
+  const { content: dateRaw, messages: contextAfterDate } = await openAIChat(
+    [...contextAfterTitle, { role: "user", content: dateUserMessage }],
+    0.7
+  )
+
+  console.log(`${modelName} date guess: ${dateRaw}`)
+
+  // --- Turn 3: tags (cache hit) ---
+  const tagsUserMessage = openAIConfig.tagsUserPromptGenerator({
+    allTags: input.allTags,
+  })
+
+  const { content: tagsRaw } = await openAIChat(
+    [...contextAfterDate, { role: "user", content: tagsUserMessage }],
+    0.2
+  )
+
+  console.log(`${modelName} tagging suggestion: ${tagsRaw}`)
+
+  // --- Parse results ---
+  const tags = tagsRaw === "NONE" ? [] : tagsRaw.split(", ")
+
+  const date = (() => {
+    if (dateRaw === "NONE") return null
     try {
       return z
         .string()
         .regex(/^\d{4}-\d{2}-\d{2}$/)
-        .parse(dateResponse)
+        .parse(dateRaw)
     } catch {
       return null
     }
-  })(dateResponse)
+  })()
 
-  if (guessedDate === null) {
-    console.log(`Document ID ${documentId}: Failed to guess a date.`)
-    additionalTags.push("ai-date_guess_failed")
-  }
-
-  console.log(`Document ID ${documentId}: ${modelName} date guess: ${dateResponse}`)
-
-  const newTags = tagResponseToTagIds([taggingResponse, ...additionalTags].join(", "), allTags)
-
-  let patchData = {
-    title: openAIResponseContent,
-    tags: [...originalDocumentTags.filter((tag) => tag !== tagIdToRemove), ...newTags],
-    ...(guessedDate ? { created_date: guessedDate } : {}),
-  }
-
-  const updateResponse = await fetch(documentUrl, {
-    method: "PATCH",
-    headers: { ...paperlessAuthHeader, "Content-Type": "application/json" },
-    body: JSON.stringify(patchData),
-  })
-
-  if (updateResponse.status === 200) {
-    console.log(`Document ID ${documentId}: Successfully updated.`)
-  } else {
-    console.log(`Document ID ${documentId}: Error updating the document! Status code ${updateResponse.status}`)
-  }
+  return { title: titleResponse, tags, date }
 }

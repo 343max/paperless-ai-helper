@@ -1,59 +1,33 @@
-import { z } from "zod"
-import { paperlessConfig } from "../config.ts"
-import { findDocumentsWithTagId } from "./findDocumentsWithTagId.ts"
-import { processDocument } from "./processDocument.ts"
+import { z } from "zod";
+import { processDocument } from "./processDocument.ts";
 
-import express from "express"
+const readStdin = (): Promise<string> =>
+  new Promise((resolve) => {
+    if (process.stdin.isTTY) return resolve("");
+    let data = "";
+    process.stdin.setEncoding("utf8");
+    process.stdin.on("data", (chunk) => (data += chunk));
+    process.stdin.on("end", () => resolve(data));
+  });
 
-const app = express()
-const port = 8080
+const stdinJsonSchema = z.object({
+  content: z.string(),
+  title: z.string(),
+  allTags: z.array(z.string()),
+});
 
-const main = async () => {
-  try {
-    const documentIds = await findDocumentsWithTagId(paperlessConfig.processTagId)
-
-    if (documentIds.length === 0) {
-      console.log("No documents to process. going back to sleep.")
-      return
-    }
-
-    console.log(`Will process these documents: ${JSON.stringify(documentIds)}`)
-
-    for (const documentId of documentIds) {
-      await processDocument(documentId)
-    }
-  } catch (error) {
-    console.error(error)
-  }
+const stdinData = await readStdin();
+if (!stdinData.trim()) {
+  console.error(JSON.stringify({ success: false, error: "No JSON input on stdin" }));
+  process.exit(1);
 }
 
-app.post("/process/:documentId", async (req, res) => {
-  const documentId = parseInt(z.object({ documentId: z.string() }).parse(req.params).documentId)
-  try {
-    await processDocument(documentId, true)
-
-    res.send(JSON.stringify({ success: true }))
-  } catch (error) {
-    console.error(error)
-    res.send(JSON.stringify({ success: false }))
-  }
-})
-
-app.post("/process", async (req, res) => {
-  try {
-    await main()
-
-    res.send(JSON.stringify({ success: true }))
-  } catch (error) {
-    console.error(error)
-    res.send(JSON.stringify({ success: false }))
-  }
-})
-
-setInterval(main, 1000 * 60 * 3)
-
-main()
-
-app.listen(port, () => {
-  console.log(`Listening on port ${port}...`)
-})
+try {
+  const input = stdinJsonSchema.parse(JSON.parse(stdinData));
+  const result = await processDocument(input);
+  console.log(JSON.stringify(result, null, 2));
+  process.exit(0);
+} catch (error) {
+  console.error(JSON.stringify(String(error)));
+  process.exit(1);
+}
